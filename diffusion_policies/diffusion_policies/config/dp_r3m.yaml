@@ -8,6 +8,7 @@ _target_: diffusion_policies.workspace.train_diffusion_unet_image_workspace.Trai
 task_name: ${task.name}
 shape_meta: ${task.shape_meta}
 exp_name: "default"
+policy_family: DP
 
 horizon: 4
 n_obs_steps: 2
@@ -123,10 +124,11 @@ training:
   save_video: False
 
 logging:
-  project: spatial_generalization
-  group: dp_r3m
-  name: ${exp_name}
-  id: ${now:%Y.%m.%d-%H.%M.%S}_${exp_name}
+  project: UMI-Gen
+  group: ${policy_family}
+  name: null
+  running_setting: ${exp_name}
+  id: null
   mode: online
   resume: false
   tags:

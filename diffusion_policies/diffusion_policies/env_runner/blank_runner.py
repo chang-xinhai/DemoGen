@@ -2,7 +2,8 @@ from diffusion_policies.env_runner.base_runner import BaseRunner
 
 class BlankRunner(BaseRunner):
     def __init__(self,
-            output_dir):
+            output_dir,
+            **kwargs):
         super().__init__(output_dir)
     
     def run(self, policy):

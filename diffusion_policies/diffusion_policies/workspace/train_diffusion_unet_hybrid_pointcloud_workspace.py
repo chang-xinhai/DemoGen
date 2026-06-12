@@ -29,6 +29,7 @@ from diffusion_policies.env_runner.base_runner import BaseRunner
 from diffusion_policies.common.checkpoint_util import TopKCheckpointManager
 from diffusion_policies.common.json_logger import JsonLogger
 from diffusion_policies.common.pytorch_util import dict_apply, optimizer_to
+from diffusion_policies.common.wandb_util import build_wandb_kwargs, is_wandb_enabled
 from diffusion_policies.model_dp3.diffusion.ema_model import EMAModel
 from diffusion_policies.model_dp3.common.lr_scheduler import get_scheduler
 
@@ -132,13 +133,13 @@ class TrainDiffusionUnetHybridPointcloudWorkspace(BaseWorkspace):
             
 
         if cfg.training.rollout_every is None:
-            rollout_every = int(cfg.training.num_epochs / 5)
+            rollout_every = max(1, int(cfg.training.num_epochs / 5))
         else:
             rollout_every = cfg.training.rollout_every
         rollout_every = 1e9
             
         if cfg.training.checkpoint_every is None:
-            checkpoint_every = int(cfg.training.num_epochs / 2)
+            checkpoint_every = max(1, int(cfg.training.num_epochs / 2))
         else:
             checkpoint_every = cfg.training.checkpoint_every
 
@@ -177,22 +178,27 @@ class TrainDiffusionUnetHybridPointcloudWorkspace(BaseWorkspace):
         if env_runner is not None:
             assert isinstance(env_runner, BaseRunner)
         
-        # cfg.logging.name = str(cfg.logging.name)
-        # cprint("-----------------------------", "yellow")
-        # cprint(f"[WandB] group: {cfg.logging.group}", "yellow")
-        # cprint(f"[WandB] name: {cfg.logging.name}", "yellow")
-        # cprint("-----------------------------", "yellow")
-        # # configure logging
-        # wandb_run = wandb.init(
-        #     dir=str(self.output_dir),
-        #     config=OmegaConf.to_container(cfg, resolve=True),
-        #     **cfg.logging
-        # )
-        # wandb.config.update(
-        #     {
-        #         "output_dir": self.output_dir,
-        #     }
-        # )
+        wandb_run = None
+        if is_wandb_enabled(cfg):
+            wandb_kwargs = build_wandb_kwargs(cfg, self.output_dir)
+            cfg.logging.project = wandb_kwargs["project"]
+            cfg.logging.name = wandb_kwargs["name"]
+            cprint("-----------------------------", "yellow")
+            cprint(f"[WandB] project: {cfg.logging.project}", "yellow")
+            cprint(f"[WandB] group: {cfg.logging.group}", "yellow")
+            cprint(f"[WandB] name: {cfg.logging.name}", "yellow")
+            cprint("-----------------------------", "yellow")
+            wandb_run = wandb.init(
+                config=OmegaConf.to_container(cfg, resolve=True),
+                **wandb_kwargs
+            )
+            wandb.config.update(
+                {
+                    "output_dir": self.output_dir,
+                }
+            )
+        else:
+            cprint("[WandB] disabled via logging.mode=disabled", "yellow")
 
         # configure checkpoint
         topk_manager = TopKCheckpointManager(
@@ -271,7 +277,8 @@ class TrainDiffusionUnetHybridPointcloudWorkspace(BaseWorkspace):
                         is_last_batch = (batch_idx == (len(train_dataloader)-1))
                         if not is_last_batch:
                             # log of last step is combined with validation and rollout
-                            # wandb_run.log(step_log, step=self.global_step)
+                            if wandb_run is not None:
+                                wandb_run.log(step_log, step=self.global_step)
                             json_logger.log(step_log)
                             self.global_step += 1
 
@@ -371,7 +378,8 @@ class TrainDiffusionUnetHybridPointcloudWorkspace(BaseWorkspace):
 
                 # end of epoch
                 # log of last step is combined with validation and rollout
-                # wandb_run.log(step_log, step=self.global_step)
+                if wandb_run is not None:
+                    wandb_run.log(step_log, step=self.global_step)
                 json_logger.log(step_log)
                 
                 self.global_step += 1
@@ -379,7 +387,8 @@ class TrainDiffusionUnetHybridPointcloudWorkspace(BaseWorkspace):
                 del step_log
 
         # stop wandb run
-        # wandb_run.finish()
+        if wandb_run is not None:
+            wandb_run.finish()
 
 
     def eval(self):

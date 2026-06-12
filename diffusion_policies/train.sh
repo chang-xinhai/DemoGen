@@ -2,6 +2,7 @@ demo=${1}
 algo=${2}
 task=${3}
 seed=${4}
+wandb_mode=${5:-online}
 
 data_root=../data
 exp_name=${demo}-${algo}-seed${seed}
@@ -17,6 +18,6 @@ python -W ignore train.py --config-name=${algo}.yaml \
                             training.seed=${seed} \
                             training.device="cuda:0" \
                             exp_name=${exp_name} \
-                            logging.mode=offline \
+                            logging.mode=${wandb_mode} \
                             training.num_epochs=1 \
                             task.dataset.zarr_path=${zarr_path}

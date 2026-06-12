@@ -15,7 +15,6 @@ import pathlib
 from torch.utils.data import DataLoader
 import copy
 import random
-import wandb
 import pickle
 import tqdm
 import numpy as np
@@ -28,6 +27,7 @@ from diffusion_policies.env_runner.base_runner import BaseRunner
 from diffusion_policies.common.checkpoint_util import TopKCheckpointManager
 from diffusion_policies.common.json_logger import JsonLogger
 from diffusion_policies.common.pytorch_util import dict_apply, optimizer_to
+from diffusion_policies.common.wandb_util import build_wandb_kwargs, is_wandb_enabled
 from diffusion_policies.model_dp_umi.diffusion.ema_model import EMAModel
 from diffusion_policies.model_dp_umi.common.lr_scheduler import get_scheduler
 from accelerate import Accelerator
@@ -92,16 +92,33 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
     def run(self):
         cfg = copy.deepcopy(self.cfg)
 
-        accelerator = Accelerator(log_with='wandb', kwargs_handlers=[DistributedDataParallelKwargs(find_unused_parameters=True)])
-        wandb_cfg = OmegaConf.to_container(cfg.logging, resolve=True)
-        # print(wandb_cfg)
-        wandb_cfg["dir"] = self.output_dir
-        wandb_cfg.pop('project')
-        accelerator.init_trackers(
-            project_name=cfg.logging.project,
-            config=OmegaConf.to_container(cfg, resolve=True),
-            init_kwargs={"wandb": wandb_cfg}
-        )
+        wandb_enabled = is_wandb_enabled(cfg)
+        accelerator_kwargs = {
+            "kwargs_handlers": [
+                DistributedDataParallelKwargs(find_unused_parameters=True)
+            ]
+        }
+        if wandb_enabled:
+            accelerator_kwargs["log_with"] = "wandb"
+        accelerator = Accelerator(**accelerator_kwargs)
+
+        if wandb_enabled:
+            wandb_cfg = build_wandb_kwargs(cfg, self.output_dir)
+            cfg.logging.project = wandb_cfg["project"]
+            cfg.logging.name = wandb_cfg["name"]
+            cprint("-----------------------------", "yellow")
+            cprint(f"[WandB] project: {cfg.logging.project}", "yellow")
+            cprint(f"[WandB] group: {cfg.logging.group}", "yellow")
+            cprint(f"[WandB] name: {cfg.logging.name}", "yellow")
+            cprint("-----------------------------", "yellow")
+            project_name = wandb_cfg.pop("project")
+            accelerator.init_trackers(
+                project_name=project_name,
+                config=OmegaConf.to_container(cfg, resolve=True),
+                init_kwargs={"wandb": wandb_cfg}
+            )
+        else:
+            cprint("[WandB] disabled via logging.mode=disabled", "yellow")
 
         # resume training
         if cfg.training.resume:
@@ -222,12 +239,12 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
             cprint(f"train_epochs: {cfg.training.num_epochs}", 'light_cyan')
 
         if cfg.training.rollout_every is None:
-            rollout_every = int(cfg.training.num_epochs / 5)
+            rollout_every = max(1, int(cfg.training.num_epochs / 5))
         else:
             rollout_every = cfg.training.rollout_every
             
         if cfg.training.checkpoint_every is None:
-            checkpoint_every = int(cfg.training.num_epochs / 10)
+            checkpoint_every = max(1, int(cfg.training.num_epochs / 10))
         else:
             checkpoint_every = cfg.training.checkpoint_every
 
@@ -291,7 +308,8 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                         is_last_batch = (batch_idx == (len(train_dataloader)-1))
                         if not is_last_batch:
                             # log of last step is combined with validation and rollout
-                            accelerator.log(step_log, step=self.global_step)
+                            if wandb_enabled:
+                                accelerator.log(step_log, step=self.global_step)
                             json_logger.log(step_log)
                             self.global_step += 1
 
@@ -398,7 +416,8 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                 # ========= eval end for this epoch ==========
                 # end of epoch
                 # log of last step is combined with validation and rollout
-                accelerator.log(step_log, step=self.global_step)
+                if wandb_enabled:
+                    accelerator.log(step_log, step=self.global_step)
                 json_logger.log(step_log)
                 self.global_step += 1
                 self.epoch += 1

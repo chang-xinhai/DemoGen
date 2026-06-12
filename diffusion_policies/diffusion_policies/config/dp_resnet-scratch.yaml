@@ -8,6 +8,7 @@ _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainD
 task_name: ${task.name}
 shape_meta: ${task.shape_meta}
 exp_name: "default"
+policy_family: DP
 
 horizon: 16
 n_obs_steps: 2
@@ -121,13 +122,14 @@ training:
   tqdm_interval_sec: 1.0
 
 logging:
-  project: diffusion_policy_debug
-  resume: True
+  project: UMI-Gen
+  resume: false
   mode: online
-  name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+  name: null
+  running_setting: ${exp_name}
   tags: ["${name}", "${task_name}", "${exp_name}"]
   id: null
-  group: null
+  group: ${policy_family}
 
 checkpoint:
   topk:

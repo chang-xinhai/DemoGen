@@ -7,6 +7,7 @@ _target_: diffusion_policies.workspace.train_diffusion_unet_hybrid_pointcloud_wo
 task_name: ${task.name}
 shape_meta: ${task.shape_meta}
 exp_name: "debug"
+policy_family: iDP3
 
 horizon: 4
 n_obs_steps: 2
@@ -123,16 +124,17 @@ eval:
   save_video: True
 
 logging:
-  project: spatial_generalization
-  group: dp3
-  name: ${exp_name}
-  id: ${now:%Y.%m.%d-%H.%M.%S}_${exp_name}
+  project: UMI-Gen
+  group: ${policy_family}
+  name: null
+  running_setting: ${exp_name}
+  id: null
   mode: online
   resume: false
   tags:
     - ${exp_name}
     - ${task_name}
-    - dp3
+    - idp3
 
 checkpoint:
   save_ckpt: False # if True, save checkpoint every checkpoint_every
