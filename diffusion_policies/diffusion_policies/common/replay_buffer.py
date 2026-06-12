@@ -14,6 +14,12 @@ def check_chunks_compatible(chunks: tuple, shape: tuple):
         assert isinstance(c, numbers.Integral)
         assert c > 0
 
+
+def group_items(group):
+    if hasattr(group, 'items'):
+        return group.items()
+    return ((key, group[key]) for key in group.keys())
+
 def rechunk_recompress_array(group, name, 
         chunks=None, chunk_length=None,
         compressor=None, tmp_key='_temp'):
@@ -96,7 +102,7 @@ class ReplayBuffer:
         assert('data' in root)
         assert('meta' in root)
         assert('episode_ends' in root['meta'])
-        for key, value in root['data'].items():
+        for key, value in group_items(root['data']):
             # print("value.shape[0]", value.shape[0])
             # print("root['meta']['episode_ends'][-1]", root['meta']['episode_ends'][-1])
             assert(value.shape[0] == root['meta']['episode_ends'][-1])
@@ -142,7 +148,7 @@ class ReplayBuffer:
         Open a on-disk zarr directly (for dataset larger than memory).
         Slower.
         """
-        group = zarr.open(os.path.expanduser(zarr_path), mode)
+        group = zarr.open(os.path.expanduser(zarr_path), mode=mode)
         return cls.create_from_group(group, **kwargs)
     
     # ============= copy constructors ===============
@@ -155,12 +161,12 @@ class ReplayBuffer:
         """
         Load to memory.
         """
-        src_root = zarr.group(src_store)
+        src_root = zarr.open_group(src_store, mode='r')
         root = None
         if store is None:
             # numpy backend
             meta = dict()
-            for key, value in src_root['meta'].items():
+            for key, value in group_items(src_root['meta']):
                 if len(value.shape) == 0:
                     meta[key] = np.array(value)
                 else:
@@ -223,7 +229,7 @@ class ReplayBuffer:
         if backend == 'numpy':
             print('backend argument is deprecated!')
             store = None
-        group = zarr.open(os.path.expanduser(zarr_path), 'r')
+        group = zarr.open(os.path.expanduser(zarr_path), mode='r')
         return cls.copy_from_store(src_store=group.store, store=store, 
             keys=keys, chunks=chunks, compressors=compressors, 
             if_exists=if_exists, **kwargs)
@@ -233,7 +239,7 @@ class ReplayBuffer:
         """
         on-disk mapping
         """
-        group = zarr.open(os.path.expanduser(zarr_path), 'r')
+        group = zarr.open(os.path.expanduser(zarr_path), mode='r')
         buffer = cls(root=group)
         # for key, value in buffer.items():
         #     cprint(f'Replay Buffer: {key}, shape {value.shape}, dtype {value.dtype}, range {value.min():.2f}~{value.max():.2f}', 'green')
@@ -256,7 +262,7 @@ class ReplayBuffer:
         else:
             meta_group = root.create_group('meta', overwrite=True)
             # save meta, no chunking
-            for key, value in self.root['meta'].items():
+            for key, value in group_items(self.root['meta']):
                 _ = meta_group.array(
                     name=key,
                     data=value, 
@@ -265,7 +271,7 @@ class ReplayBuffer:
         
         # save data, chunk
         data_group = root.create_group('data', overwrite=True)
-        for key, value in self.root['data'].items():
+        for key, value in group_items(self.root['data']):
             cks = self._resolve_array_chunks(
                 chunks=chunks, key=key, array=value)
             cpr = self._resolve_array_compressor(
@@ -425,7 +431,7 @@ class ReplayBuffer:
         return self.data.values()
     
     def items(self):
-        return self.data.items()
+        return group_items(self.data)
     
     def __getitem__(self, key):
         return self.data[key]
