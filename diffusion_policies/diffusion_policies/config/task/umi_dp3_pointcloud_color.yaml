@@ -1,0 +1,26 @@
+name: umi_0524_pointcloud_color
+
+task_name: ${name}
+
+shape_meta: &shape_meta
+  obs:
+    point_cloud:
+      shape: [1024, 6]
+      type: point_cloud
+    agent_pos:
+      shape: [7]
+      type: low_dim
+  action:
+    shape: [7]
+
+env_runner: null
+
+dataset:
+  _target_: diffusion_policies.dataset.panda_dataset.PandaDataset
+  zarr_path: /nvme1/xinhai/projects/UMI-Gen/data/zarr/dataset_0524_vive_rsrgb_input/dp3_pointcloud_color.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: ${training.seed}
+  val_ratio: 0.02
+  max_train_episodes: null

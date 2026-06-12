@@ -185,7 +185,8 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
             cfg.task.env_runner,
             output_dir=self.output_dir,
             image_obs_only=True)
-        assert isinstance(env_runner, BaseRunner)
+        if env_runner is not None:
+            assert isinstance(env_runner, BaseRunner)
 
         # # configure logging
         # wandb_run = wandb.init(
@@ -330,7 +331,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                 policy.eval()
 
                 # run rollout
-                if (self.epoch % rollout_every) == (rollout_every - 1):
+                if (self.epoch % rollout_every) == (rollout_every - 1) and env_runner is not None:
                     runner_log = env_runner.run(policy)
                     # log all
                     step_log.update(runner_log)
